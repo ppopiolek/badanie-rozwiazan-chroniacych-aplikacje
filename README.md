@@ -1,10 +1,12 @@
 # Badanie rozwiązań chroniących natywne aplikacje działające w trybie użytkownika
 
 ## Wstęp
+Poniższa praca stanowi projekt z przedmiotu Bezpieczeństwo systemów i oprogramowania (BSO) na Wydziale Elektroniki i Technik Informacyjnych Politechniki Warszawskiej.
+
 Celem pracy jest zbadanie wybranych rozwiązań chroniących natywne aplikacje działające w trybie użytkownika. W celu przeprowadzenia wszelkich praktycznych części każdego z zagadnień używany był przeze mnie system Ubuntu 20.04.2.0 w wersji 64-bitowej. Innymi użytymi narzędziami był Python 3.8.5, kompilator gcc w wersji 9.3.0, oraz debugger GNU gdb w wersji 9.2.
 
 ### Przepełnienie bufora
-Wszystkie rozwiązania badane przeze mnie w poniższej pracy mają na celu ochronę użytkownika przed atakami typu _Buffer Overflow_. Z tego też względu na początku postanowiłem lepiej przybliżyć koncepcje tego typu ataków.  
+Wszystkie rozwiązania badane przeze mnie w poniższej pracy mają na celu ochronę użytkownika przed atakami typu _buffer overflow_. Z tego też względu na początku postanowiłem lepiej przybliżyć koncepcje tego typu ataków.  
 
 W tej pracy skupiam się na przepełnieniu bufora na stosie. Jest ono możliwe, ze względu na zastosowanie niebezpiecznych funkcji w różnych językach programowania. Tymi językami są najczęściej _C_/_C++_, ponieważ nie posiadają one wbudowanych zabezpieczeń przed nadpisaniem, bądź dostępem do danych w pamięci. Rozważania prowadzone dalej prowadzone są dla użycia języka _C_. Wyzej wspomniane funkcje pozwalają użytkownikowi na wpisanie danych do pamięci, poza wyznaczony obszar. Jest to możliwe ponieważ nie dokonują one poprawnej weryfikacji wprowadzonych danych. W takiej sytuacji użytkownik może wprowadzić dane o większej długości, niż przeznaczony na to bufor. Nadmiarowa długość wejścia nadpisze pamięć poza buforem.  
 
