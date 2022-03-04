@@ -100,10 +100,10 @@ print(p.readall())
 
 Plik _exploit.py_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Kanarki_.
 
-#### Działanie exploitu dla wersji programu bez włączonego zabezpieczenia, oraz z włączonym zabezpieczeniem
+#### Działanie exploit'a dla wersji programu bez włączonego zabezpieczenia, oraz z włączonym zabezpieczeniem
 
 
-Poniżej okno debuggera dla uruchomienia exploitu komendą ```python3 exploit.py``` z wyłączonymi kanarkami stosu (komenda użyta do kompilacji pliku main.c: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```):
+Poniżej okno debuggera dla uruchomienia exploit'a komendą ```python3 exploit.py``` z wyłączonymi kanarkami stosu (komenda użyta do kompilacji pliku main.c: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```):
 
 <p align="center">
   <img src="obrazy/exploit_bez_kanarkow.png" />
@@ -113,7 +113,7 @@ Poniżej okno debuggera dla uruchomienia exploitu komendą ```python3 exploit.py
 </p>  
 
 
-Okno debuggera dla uruchomienia exploitu komendą ```python3 exploit.py``` z włączonymi kanarkami stosu (komenda użyta do kompilacji pliku main.c: ```gcc main.c -std=c99 -z execstack -no-pie -w -o main -Wl,-z,norelro```):
+Okno debuggera dla uruchomienia exploit'a komendą ```python3 exploit.py``` z włączonymi kanarkami stosu (komenda użyta do kompilacji pliku main.c: ```gcc main.c -std=c99 -z execstack -no-pie -w -o main -Wl,-z,norelro```):
 
 <p align="center">
   <img src="obrazy/exploit_z_kanarkami.png" />
@@ -181,15 +181,15 @@ print(p.readall())
 
 Plik _exploit.py_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _ASLR_.
 
-#### Działanie exploitu dla wersji programu bez włączonego zabezpieczenia oraz z włączonym zabezpieczeniem
+#### Działanie exploit'a dla wersji programu bez włączonego zabezpieczenia oraz z włączonym zabezpieczeniem
 
-Najpierw działanie exploitu dla systemu Linux, po wykonaniu w terminalu polecenia dezaktywującego mechanizm ASLR. Kompilacja samego programu odbyła się przy użyciu komendy: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```:
+Najpierw działanie exploit'a dla systemu Linux, po wykonaniu w terminalu polecenia dezaktywującego mechanizm ASLR. Kompilacja samego programu odbyła się przy użyciu komendy: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```:
 
 <p align="center">
   <img src="obrazy/exploit_bez_aslr.png" />
 </p>
 <p align = "center">
-  Rys. 5 - Działanie exploitu z wyłączonym ASLR - wykonanie shellcode’u powiodło się.
+  Rys. 5 - Działanie exploit'a z wyłączonym ASLR - wykonanie shellcode’u powiodło się.
 </p>  
 
 Następnie sprawdziłem czy exploit zadziała dla programu skompilowanego w porzedniej sytuacji, jednak z włączonym ASLR.
@@ -198,7 +198,7 @@ Następnie sprawdziłem czy exploit zadziała dla programu skompilowanego w porz
   <img src="obrazy/exploit_z_aslr.png" />
 </p>
 <p align = "center">
-  Rys. 6 - Działanie exploitu z włączonym ASLR - wykonanie shellcode’u nie powiodło się.
+  Rys. 6 - Działanie exploit'a z włączonym ASLR - wykonanie shellcode’u nie powiodło się.
 </p>  
 
 ### Porównanie działania ASLR dla systemów z rodziny Windows oraz Linux
@@ -208,3 +208,85 @@ Platformy _Windows_, oraz _Linux_ zapewniają _ASLR_ w odmienny sposób. Główn
 ### Użyteczność metody oraz wady jej stosowania
 
 Opisana powyżej metoda może znacznie utrudnić atakującemu ataki typu _ROP_ (_return-oriented programming_). Mimo tego że technika jest często możliwa do obejścia, to warto ją strosować, w szczególności w połączeniu z innymi technikami (jak np. opisany w kolejnym punkcie niewykonywalny stos). Niestety, w zależności od implementacji, ma ona wpływ na wydajność, bądź wykorzystanie pamięci programu.
+
+## Execution Disable / NX / W + X
+
+### Zakres działania
+
+Omawiana w tym punkcie metoda ma na celu spowodowanie, aby wskazane segmenty pamięci nie mogły być zapisywane i wykonywane w tym samym momencie. Jest wspierana przez większość współczesnych procesorów. System może oznaczyć pewne obszary pamięci jako wykonywalne, lub niewykonywalne. Dokładny sposób działania może się różnić, w zależności od wykorzystywanego systemu czy sprzętu, jednak koncepcyjnie wszystkie rozwiązania dążą do tego samego - wspomnianego wyżej zablokowania możliwości pisania, oraz wykonywania zawartości określonych obszarów pamięci jednocześnie. Dla rozpa- trywanego w tej pracy _buffer overflow_ - metoda ta nie blokuje przepełnienia bufora, jednak zapobiega wykonaniu wrzuconego na stos kodu _shellcode_.
+
+### Przykładowa aplikacja
+
+Na poziome aplikacji nie ma różnicy w kodzie aplikacji pomiędzy tym punktem a poprzednim. Dla przypomnienia kod programu wygląda następująco:
+```C
+#include <stdio.h>
+#include <stdlib.h>
+
+void get_users_name()
+{
+    char name[64] = {0};
+    puts("Podaj imie:");
+    gets(name);
+    printf("Czesc %s!\n", name);
+}
+
+int main()
+{
+    get_users_name();
+    return 0;
+}
+```
+
+Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Execution Disable_.
+
+### Exploit
+
+Ogólna zasada działania _exploit_'a w tej wersji nie zmieniła się szczególnie, jednak tym razem zmienia się konstrukcja ładunku. Zamiast całego _shellcode_’u, umieszczona jest instrukcja _0xCC_, która ma za zadanie zatrzymanie debuggera.
+
+```Python 
+from pwn import *
+
+p = process("./main")
+p.readuntil("Podaj imie:\n")
+
+padding = b'\x90'*72
+RIP = p64(0x7fffffffdefc)
+NOP = b'\x90'*128
+trap = b'\xCC'
+payload =  padding + RIP + NOP + trap
+
+gdb.attach(p)
+
+p.sendline(payload)
+print(p.readall())
+```
+
+Plik _exploit.py_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Execution Disable_.
+
+#### Działanie exploit'a dla wersji programu bez włączonego zabezpieczenia oraz z włączonym zabezpieczeniem
+
+W celu pokazania działania zabezpieczenia, chce zobrazować sytuację w której stos zostaje przepełniony, jednak umieszczone na stosie instrukcje nie wykonują się, a działanie programu zostaje przerwane.  
+
+Najpierw w wersji dla wyłączonego zabezpieczenia. Kompilacja kodu programu komendą: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```.
+
+<p align="center">
+  <img src="obrazy/gdb4_1.png" />
+</p>
+<p align = "center">
+  Rys. 7 - SIGTRAP - ustawiona na stosie instrukcja została wykonana.
+</p>  
+
+Teraz dla włączonego zabezpieczenia. Kompilacja kodu programu komendą: ```gcc main.c -std=c99 -fno-stack-protector -no-pie -w -o main -Wl,-z,norelro```.
+
+<p align="center">
+  <img src="obrazy/gdb4_2.png" />
+</p>
+<p align = "center">
+  Rys. 8 - SIGSEGV - ustawiona na stosie instrukcja nie została wykonana.
+</p> 
+
+Jak widać pamięć stosu _main_ w obu przypadkach wygląda tak samo (więc w obu przypadkach doszło do przepełnienia bufora). Jednak tylko w przypadku bez zabezpieczenia, instrukcja umieszczona na stosie została wykonana i kompilator otrzymał _SIGTRAP_.
+
+### Użyteczność metody oraz wady jej stosowania
+
+Powyższa metoda jest skuteczna jeśli chodzi o zapobieganie wykonywania instrukcji na stosie funkcji. Możliwym dla atakującego obejściem jest np. zastosowanie ataku typu _return-to-libc_. Z tego właśnie względu metoda ta szczególnie dobrze sprawdzi się z jednoczesnym użyciem innych metod np. _ASLR_.
