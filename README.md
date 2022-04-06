@@ -8,6 +8,24 @@
   2.3. [Exploit](#cana3)\
   2.4. [Porównanie metody dla kompilatorów gcc oraz clang](#cana4)\
   2.5. [Użyteczność metody oraz wady jej stosowania](#cana5)
+3. [ASLR](#aslr)\
+  3.1. [Zakres działania](#aslr1)\
+  3.2. [Przykładowa aplikacja](#aslr2)\
+  3.3. [Exploit](#aslr3)\
+  3.4. [Porównanie działania dla systemów z rodziny Windows oraz Linux](#aslr4)\
+  3.5. [Użyteczność metody oraz wady jej stosowania](#aslr5)
+4. [Execution Disable / NX / W + X](#nx)\
+  4.1. [Zakres działania](#nx1)\
+  4.2. [Przykładowa aplikacja](#nx2)\
+  4.3. [Exploit](#nx3)\
+  4.4. [Użyteczność metody oraz wady jej stosowania](#nx4)
+5. [Fortify](#fort)\
+  5.1. [Zakres działania](#fort1)\
+  5.2. [Przykładowa aplikacja](#fort2)\
+  5.3. [Exploit](#fort3)\
+  5.4. [Porównanie metody dla kompilatorów gcc oraz clang](#fort4)\
+  5.5. [Użyteczność metody oraz wady jej stosowania](#fort5)
+6. [Wnioski](#wnioski)
 
 <a name="wstep"></a>
 ## Wstęp
@@ -147,11 +165,14 @@ Przedstawiana w tym punkcie metoda działa w podobny sposób w przypadku najnows
 ### Użyteczność metody oraz wady jej stosowania
 Kanarki stosu są jedną z podstawowych metod zabezpieczenia przed atakami typu _buffer overflow_. Mimo wprowadzanych ulepszeń jak np. w kwestii randomizacji wartości kanarka, mogą się one okazać możliwe do przewidzenia, więc nigdy nie stanowią pełnego zabezpieczenia. Wymuszają one dla procesora dodatkowe instrukcje, wydłużając czas wykonania programu.
 
+<a name="aslr"></a>
 ## ASLR
 
+<a name="aslr1"></a>
 ### Zakres działania
 _ASLR_ czyli _Address Space Layout Randomization_ jest techniką zapobiegającą możliwej eksploitacji programu poprzez naruszenia jego pamięci. Mechanim taki, w przeciwieństwie do wcześniej omaiwanych kanarków stosu, nie jest dodawany w jakiś sposób przez kompilator, a za jego działanie odpowiada sam system operacyjny. Jego działanie opiera się na losowaniu zestawu kluczowych adresów (takich jak miejsca stosu, sterty, czy bilbliotek). To w jaki dokładnie sposób się to odbywa, zależy od implementacji mechanizmu w danym systemie operacyjnym. W najlepszym przypadku istotne adresy powinny być losowe przy każdym wywołaniu ramki stosu. Powinno się także zadbać o zmianę przesunięcia kluczowych dla wykonania programu struktur o inną, losową wartość, przy każdym uruchomieniu programu.
 
+<a name="aslr2"></a>
 ### Przykładowa aplikacja
 Poniższa aplikacja, napisana w języku _C_, została zbudowana na bazie aplikacji z porzedniego punktu. W poprzednim punkcie udało się wywołać instrukcje _shellcode_’u mino włączonego _ASLR_, ponieważ program podawał za każdym razem nowy, wylosowany adres stosu _main_. W tym punkcie aplikacja nie podaje takiego adresu. Zakładam, że atakujący zdobył ten adres w inny sposób, a przez brak włączonego _ASLR_ adres taki może zostać umieszczony na stałe w exploicie (który jest pokazany w kolejnym punkcie).
 
@@ -176,6 +197,7 @@ int main()
 
 Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _ASLR_.
 
+<a name="aslr3"></a>
 ### Exploit
 
 Poniższy exploit działa na zasadzie podobnej do poprzedniego, jednak tym razem nie zczytuje od adresu ramki stosu main od programu przy każdym wykonaniu, tylko ma na stałe ustalony adres tej ramki.
@@ -220,20 +242,25 @@ Następnie sprawdziłem czy exploit zadziała dla programu skompilowanego w porz
   Rys. 6 - Działanie exploit'a z włączonym ASLR - wykonanie shellcode’u nie powiodło się.
 </p>  
 
+<a name="aslr4"></a>
 ### Porównanie działania ASLR dla systemów z rodziny Windows oraz Linux
 
 Platformy _Windows_, oraz _Linux_ zapewniają _ASLR_ w odmienny sposób. Główna róznica jest taka, że _ASLR_ dla systemu _Windows 10_ jest dokonywany podczas ładowania programu i nie wpływa to na wydajność programu podczas jego działania. W systemach z rodziny _Linux_ operacje związane z _ASLR_ są dokonywane w trakcie działania programu, co ma wpływ na wydajność programu. W zamian za to w systemie _Linux_ wykorzystanie pamięci przez program może być lepiej zorganizowane.
 
+<a name="aslr5"></a>
 ### Użyteczność metody oraz wady jej stosowania
 
 Opisana powyżej metoda może znacznie utrudnić atakującemu ataki typu _ROP_ (_return-oriented programming_). Mimo tego że technika jest często możliwa do obejścia, to warto ją strosować, w szczególności w połączeniu z innymi technikami (jak np. opisany w kolejnym punkcie niewykonywalny stos). Niestety, w zależności od implementacji, ma ona wpływ na wydajność, bądź wykorzystanie pamięci programu.
 
+<a name="nx"></a>
 ## Execution Disable / NX / W + X
 
+<a name="nx1"></a>
 ### Zakres działania
 
 Omawiana w tym punkcie metoda ma na celu spowodowanie, aby wskazane segmenty pamięci nie mogły być zapisywane i wykonywane w tym samym momencie. Jest wspierana przez większość współczesnych procesorów. System może oznaczyć pewne obszary pamięci jako wykonywalne, lub niewykonywalne. Dokładny sposób działania może się różnić, w zależności od wykorzystywanego systemu czy sprzętu, jednak koncepcyjnie wszystkie rozwiązania dążą do tego samego - wspomnianego wyżej zablokowania możliwości pisania, oraz wykonywania zawartości określonych obszarów pamięci jednocześnie. Dla rozpa- trywanego w tej pracy _buffer overflow_ - metoda ta nie blokuje przepełnienia bufora, jednak zapobiega wykonaniu wrzuconego na stos kodu _shellcode_.
 
+<a name="nx2"></a>
 ### Przykładowa aplikacja
 
 Na poziome aplikacji nie ma różnicy w kodzie aplikacji pomiędzy tym punktem a poprzednim. Dla przypomnienia kod programu wygląda następująco:
@@ -258,6 +285,7 @@ int main()
 
 Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Execution Disable_.
 
+<a name="nx3"></a>
 ### Exploit
 
 Ogólna zasada działania _exploit_'a w tej wersji nie zmieniła się szczególnie, jednak tym razem zmienia się konstrukcja ładunku. Zamiast całego _shellcode_’u, umieszczona jest instrukcja _0xCC_, która ma za zadanie zatrzymanie debuggera.
@@ -306,12 +334,15 @@ Teraz dla włączonego zabezpieczenia. Kompilacja kodu programu komendą: ```gcc
 
 Jak widać pamięć stosu _main_ w obu przypadkach wygląda tak samo (więc w obu przypadkach doszło do przepełnienia bufora). Jednak tylko w przypadku bez zabezpieczenia, instrukcja umieszczona na stosie została wykonana i kompilator otrzymał _SIGTRAP_.
 
+<a name="nx4"></a>
 ### Użyteczność metody oraz wady jej stosowania
 
 Powyższa metoda jest skuteczna jeśli chodzi o zapobieganie wykonywania instrukcji na stosie funkcji. Możliwym dla atakującego obejściem jest np. zastosowanie ataku typu _return-to-libc_. Z tego właśnie względu metoda ta szczególnie dobrze sprawdzi się z jednoczesnym użyciem innych metod np. _ASLR_.
 
+<a name="fort"></a>
 ## Fortify
 
+<a name="fort1"></a>
 ### Zakres działania
 
 Omawiane w tym punkcie zabezpieczenie może stanowić kolejną warstwę ochrony przed atakami typu _buffer overflow_. Może wykryć atak tego typu zarówno podczas kompilacji, jak i w trakcie wykonywania programu (w zależności od typu podatności). Działa na zasadzie sprawdzania, czy nie następuje próba podania do bufora ilości bitów, która spowoduje jego przepełnienie. Sprawdzeń dokonuję w miejscach potencjalnie niebezpiecznych (więc w miejscach użycia niebezpiecznych funkcji, m.in. _memcpy, mempcpy, memmove, memset, strcpy, stpcpy, strncpy, strcat, strncat, sprintf, vsprintf, snprintf, vsnprintf, gets_). 
@@ -346,6 +377,7 @@ Dla omawianej implementacji, istnieją dwa poziomy zabezpieczenia: ```-D FORTIFY
   Rys. 10 - Po lewej użyta flaga: -D FORTIFY SOURCE=2, a po prawej: -D FORTIFY SOURCE=1.
 </p> 
 
+<a name="fort2"></a>
 ### Przykładowa aplikacja
 
 W celu zaprezentowania zabezpieczenia, użyje kodu aplikacji pokazanej przy omawianiu kanarków stosu. Dla przypomnie- nia aplikacja używa niebezpiecznej funkcji _gets_. Poniżej kod programu:
@@ -372,6 +404,7 @@ int main()
 ```
 Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Fortify_.
 
+<a name="fort3"></a>
 ### Exploit
 
 Poniższy exploit działa na tej samej zasadzie co [exploit w sekcji _Kanarki stosu_](#exploit).
@@ -428,15 +461,18 @@ Zgodnie ze wcześniejszym opisem, w przypadku tego ataku, równie dobrze powinno
   Rys. 13 - Atak wykryty dzięki fortify (ustawionym na poziom 1).
 </p>
 
+<a name="fort4"></a>
 ### Porównanie metody dla kompilatorów _gcc_ oraz _clang_
 
 Podczas gdy _gcc_ w pełni wspiera omawiane zabezpieczenie, _clang_ nie jest kompatibilny z jego implementacją.
 
+<a name="fort5"></a>
 ### Użyteczność metody oraz wady jej stosowania
 
 Metoda ta nie wpływa w znaczącym stopniu, ani na wydajność programu, ani na jego rozmiar. Warto ją używać jako jedno z zabezpieczeń. Niestety, zabezpiecza jedynie przed niektórymi atakami opierającymi się na _buffer overflow_. Samodzielnie nie stanowi solidnego zabezpieczenia.
 
-# Wnioski
+<a name="wnioski"></a>
+## Wnioski
 
 W powyższej pracy zostały omówione niektóre z najczęściej stosowanych zabezpieczeń. W rzeczywistości jest ich bardzo wiele i dopiero połączenie wielu metod na raz zapewnia bardzo wysoką ochronę. Wybranie metod powinno być odpowiednio zoptymalizowane, a projektant oprogramowania powinien wziąć pod uwagę poziom uzyskiwanej ochrony, względem pogor- szenia wydajności, czy zwiększenia ilości wymaganej pamięci.
 
