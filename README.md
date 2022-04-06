@@ -1,10 +1,21 @@
 # Badanie rozwiązań chroniących natywne aplikacje działające w trybie użytkownika
+## Spis treści
+1. [Wstęp](#wstep)\
+  1.1. [Przepełnienie bufora](#bo)
+2. [Kanarki stosu](#cana)\
+  2.1. [Zakres działania](#cana1)\
+  2.2. [Przykładowa aplikacja](#cana2)\
+  2.3. [Exploit](#cana3)\
+  2.4. [Porównanie metody dla kompilatorów gcc oraz clang](#cana4)\
+  2.5. [Użyteczność metody oraz wady jej stosowania](#cana5)
 
+<a name="wstep"></a>
 ## Wstęp
 Poniższa praca stanowi projekt z przedmiotu Bezpieczeństwo systemów i oprogramowania (BSO) na Wydziale Elektroniki i Technik Informacyjnych Politechniki Warszawskiej.
 
 Celem pracy jest zbadanie wybranych rozwiązań chroniących natywne aplikacje działające w trybie użytkownika. W celu przeprowadzenia wszelkich praktycznych części każdego z zagadnień używany był przeze mnie system Ubuntu 20.04.2.0 w wersji 64-bitowej. Innymi użytymi narzędziami był Python 3.8.5, kompilator gcc w wersji 9.3.0, oraz debugger GNU gdb w wersji 9.2.
 
+<a name="bo"></a>
 ### Przepełnienie bufora
 Wszystkie rozwiązania badane przeze mnie w poniższej pracy mają na celu ochronę użytkownika przed atakami typu _buffer overflow_. Z tego też względu na początku postanowiłem lepiej przybliżyć koncepcje tego typu ataków.  
 
@@ -16,7 +27,9 @@ W praktyce, w nowoczesnych systemach komputerowych, nie jest to takie trywialne.
 
 Dla omówienia poszczególnych rozwiązań skupię się na ataku przez nadpisanie adresu powrotu ramki stosu.
 
+<a name="cana"></a>
 ## Kanarki stosu
+<a name="cana1"></a>
 ### Zakres działania
 
 Kanarek stosu jest specjalną wartością umieszczoną na stosie w odpowiednim miejscu, w taki sposób aby chronić dane stosu przed nadpisaniem od strony bufora. Można go skategoryzować jako zabezpieczenie służące do wykrycia próby przepełnienia buforu na stosie. Jest on dodawany automatycznie przez nowoczesne kompilatory, podczas procesu kompilacji kodu programu (pod warunkiem że taka opcja nie zostanie wyłączona). Dąży się do tego, aby miał on unikalną wartość, która będzie sprawdzana, gdy program powraca do funkcji wywołującej. W przypadku kiedy dojdzie do przepełnienia bufra na stosie i nadpisania kluczowych dla atakującego danych na stosie (np. wspomniany wcześniej adres powrotu), wtedy nieuniknionym powinno być nadpisanie przez atakującego wartości kanarka. Będzie to skutkowało blędną weryfikacją przed samym powrotem funkcji, co spowoduje przerwanie działania programu. Zapobiegnie to przejściu procesora do wykonywania instrukcji wskazanych przez atakującego.  
@@ -45,6 +58,7 @@ Można wyróżnić różne typy kanarków. Są nimi między innymi:
 - _**Random canary**_ - Losowy kanarek stosu. Jego trzy pseudolosowe bajty mogą być poprzedzone _NULL_-bajtem (0x00).
 - _**Random XOR canary**_ - _Random canary_, którego wartość może być dodatkowo _XOR_-owana np. z wartościami wskaźników. Dodaje to dodatkową warstwę bezpieczeństwa przy próbie podmienienia wartości kanarka i nadpisania jakiegoś wskaźnika przez napastnika.
 
+<a name="cana2"></a>
 ### Przykładowa aplikacja
 Poniższa aplikacja została napisana w języku _C_. Jest to prosta aplikacja pobierająca dane tekstowe od użytkownika (jego imię). Ze względu na to, że przedmiotem badań tego punktu są kanarki stosu - postanowiłem w celach demonstracyjnych umieścić w aplikacji kawałek kodu, który wprost podaje użytkownikowi adres stosu funkcji _main_.
 
@@ -72,6 +86,7 @@ int main()
 Aplikacja ta, w celu przyjęcia danych od użytkownika używa niebezpiecznej funkcji _gets()_, która została już usunięta ze standardu języka _C_. 
 Plik _main.c_ zawierający powyższy kod został dołączony do repozytorium i znajduje się w katalogu _Kanarki_.
 
+<a name="cana3"></a>
 ### Exploit
 
 Poniższy exploit pobiera od aplikacji adres z ramki stosu _main_, następnie na podstawie pobranego adresu, oraz _shellcode_'u tworzy ładunek. Ładunek został skonstruowany w taki sposób, aby wykonywalny _shellcode_ umieścić w ramce stosu _main_, tak aby wskazany adres powrotu doprowadził do wykonania _shellcode_'u (dzięki wykorzystaniu _NOP Slide_).
@@ -124,9 +139,11 @@ Okno debuggera dla uruchomienia exploit'a komendą ```python3 exploit.py``` z w�
   Rys. 4 - W tej sytuacji wykonanie programu zostało zatrzymane zgodnie z oczekiwaniami.
 </p>  
 
+<a name="cana4"></a>
 ### Porównanie metody dla kompilatorów gcc oraz clang
 Przedstawiana w tym punkcie metoda działa w podobny sposób w przypadku najnowszych wersji obu tych kompilatorów.
 
+<a name="cana5"></a>
 ### Użyteczność metody oraz wady jej stosowania
 Kanarki stosu są jedną z podstawowych metod zabezpieczenia przed atakami typu _buffer overflow_. Mimo wprowadzanych ulepszeń jak np. w kwestii randomizacji wartości kanarka, mogą się one okazać możliwe do przewidzenia, więc nigdy nie stanowią pełnego zabezpieczenia. Wymuszają one dla procesora dodatkowe instrukcje, wydłużając czas wykonania programu.
 
